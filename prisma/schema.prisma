@@ -1,0 +1,115 @@
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql" // or "mysql", "sqlite", etc.
+  url      = env("DATABASE_URL")
+}
+
+/////////////////////////////
+// USERS & AUTH
+/////////////////////////////
+
+model User {
+  id            String      @id @default(cuid())
+  name          String?
+  email         String      @unique
+  password      String?     // Optional: null for OAuth users, required for email/password
+  emailVerified Boolean     @default(false)
+  image         String?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @default(now()) @updatedAt
+
+  // Relations
+  workflows     Workflow[]
+  credentials   Credential[]
+  sessions      Session[]
+  accounts      Account[]
+}
+
+model Session {
+  id         String   @id @default(cuid())
+  token      String   @unique
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt  DateTime
+  ipAddress  String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @default(now()) @updatedAt
+}
+
+model Account {
+  id                    String    @id @default(cuid())
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Changed from providerAccountId to accountId to match Better Auth expectations
+  accountId             String
+  providerId            String
+  
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  scope                 String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @default(now()) @updatedAt
+
+  // Add unique constraint on providerId + accountId
+  @@unique([providerId, accountId])
+}
+
+model Verification {
+  id         String   @id @default(cuid())
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @default(now()) @updatedAt
+}
+
+/////////////////////////////
+// WORKFLOWS & NODES
+/////////////////////////////
+
+model Workflow {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  active      Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @default(now()) @updatedAt
+
+  nodes       Node[]
+}
+
+model Node {
+  id         String   @id @default(cuid())
+  workflowId String
+  workflow   Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  type       String   // "gmail", "sheet", "calendar", "drive", "openai", etc.
+  parameters Json     // JSON of node configuration
+}
+
+/////////////////////////////
+// CREDENTIALS FOR EXTERNAL SERVICES
+/////////////////////////////
+
+model Credential {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String   // e.g., "Google Sheets Main"
+  type      String   // e.g., "google_sheets", "gmail", "calendar", "drive", "openai"
+  data      Json     // Store OAuth tokens, API keys, config JSON
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+}
